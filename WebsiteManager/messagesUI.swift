@@ -18,35 +18,58 @@ struct messagesUI: View {
     
     @State private var messages: [Message] = []
     @State private var selectedMessage: Message? = nil
+    @State private var isLoading = true
+    
     var body: some View {
-            NavigationStack {
-                List(messages) { (message: Message) in
-                    DashboardItem(title: "\(message.name)'s Message",
-                                  description: "Phone Number: \(message.number)\n Email: \(message.email)\n Comment: \(message.comment)",
-                                  color: .blue
-                    ) { selectedMessage = message }
-                }
-                .navigationTitle("✉️ Messages")
-                // Present the modal when selectedMessage is not nil
-                .sheet(item: $selectedMessage) { message in
-                    MessageDetailView(message: message)
-                }
-                
-                .onAppear {
-                    listenForWebMessage()
+        NavigationStack {
+            Group{
+                if isLoading {
+                    ProgressView("Loading Messages...")
+                        .controlSize(.large)
+                        .font(.title2)
+                } else if messages.isEmpty {
+                    Text("You are all caught up on messages!")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                } else {
+                    List(messages) { (message: Message) in
+                        DashboardItem(title: "\(message.name)'s Message",
+                                      description: "\(message.formattedDate)\n \(message.comment)",
+                                      color: .blue
+                        ) { selectedMessage = message }
+                    }
                 }
             }
+            .navigationTitle("✉️ Messages")
+            .sheet(item: $selectedMessage) { message in
+                MessageDetailView(message: message)
+            }
+            
+            .onAppear {
+                listenForWebMessage()
+            }
         }
+    }
     
     func listenForWebMessage() {
         let db = Firestore.firestore()
-        db.collection("notifications")
+        db.collection("messages")
             .order(by: "timestamp", descending: true)
             .addSnapshotListener{ querySnapshot, error in
-                guard let documents = querySnapshot?.documents else {return}
+                guard let documents = querySnapshot?.documents else {
+                    self.isLoading = false
+                    return
+                }
                 self.messages = documents.compactMap { doc -> Message? in
                     let data = doc.data()
                     let ts = data["timestamp"] as? Timestamp
+                    
+                    let rawDate = ts?.dateValue() ?? Date()
+                    
+                    let formatter = DateFormatter()
+                    formatter.dateFormat = "MMMM d, yyyy h:mm a"
+                    
+                    let dateString = formatter.string(from: rawDate)
                     
                     return Message(
                         id: doc.documentID,
@@ -54,9 +77,12 @@ struct messagesUI: View {
                         number: data["phone"] as? String ?? "No Phone",
                         email: data["email"] as? String ?? "No Email",
                         comment: data["comments"] as? String ?? "",
-                        timestamp: ts?.dateValue() ?? Date()
+                        timestamp: rawDate,
+                        formattedDate: dateString
                     )
                 }
+                
+                self.isLoading = false
             }
     }
 }
@@ -74,18 +100,19 @@ struct MessageDetailView: View {
                     .bold()
                 Spacer()
                 Button("Close") {
-                    dismiss()  // closes the modal
+                    dismiss()
                 }
                 .font(.headline)
             }
             
             Divider()
             
-            Section(header: Text("Information").font(.title3)){
+            Section(header: Text("Information").font(.title2)){
                 Text("Phone Number: \(message.number)")
                     .font(.subheadline)
                 Text("Email: \(message.email)")
                     .font(.subheadline)
+                Text("Sent At: \(message.formattedDate)")
             }
             
             Divider()
@@ -130,11 +157,11 @@ struct MessageDetailView: View {
     
     func deleteMessage(_ message: Message) {
         let db = Firestore.firestore()
-        db.collection("notifications").document(message.id).delete()
+        db.collection("messages").document(message.id).delete()
         dismiss()
     }
 }
 
-#Preview {
-    messagesUI()
-}
+//#Preview {
+//    messagesUI()
+//}

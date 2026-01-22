@@ -25,10 +25,15 @@ struct WebsiteManagerTabView: View {
                     Image(systemName: "square.and.pencil")
                     Text("Edit")
                 }
+            SettingsUI()
+                .tabItem{
+                    Image(systemName: "gearshape.fill")
+                    Text("Settings")
+                }
         }
     }
 }
 
-#Preview {
-    WebsiteManagerTabView()
-}
+//#Preview {
+//    WebsiteManagerTabView()
+//}

@@ -15,6 +15,7 @@ struct Message: Identifiable {
     let email:String
     let comment:String
     let timestamp: Date
+    let formattedDate: String
 }
 
 func processDocuments(documents: [QueryDocumentSnapshot]) -> [Message] {
@@ -25,13 +26,19 @@ func processDocuments(documents: [QueryDocumentSnapshot]) -> [Message] {
         let ts = data["timestamp"] as? Timestamp
         let dateValue = ts?.dateValue() ?? Date() // Default to "now" if missing
         
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM d, yyyy h:mm a"
+        
+        let dateString = formatter.string(from: dateValue)
+        
         return Message(
             id: doc.documentID,
             name: data["name"] as? String ?? "",
             number: data["phone"] as? String ?? "",
             email: data["email"] as? String ?? "",
             comment: data["comments"] as? String ?? "",
-            timestamp: dateValue
+            timestamp: dateValue,
+            formattedDate: dateString
         )
     }
     return mappedMessages

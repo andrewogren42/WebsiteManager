@@ -41,5 +41,10 @@ struct Order: Identifiable, Codable{
     let paypalTotal:Double
     let items: [OrderItem]
     let timestamp: Date
+    var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM d, yyyy h:mm a"
+        return formatter.string(from: timestamp)
+    }
     
 }

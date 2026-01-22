@@ -11,16 +11,27 @@ import FirebaseFirestore
 struct ordersUI: View {
     @StateObject var viewModel = ordersViewModel()
     @State private var selectedOrder: Order? = nil
-    
     var body: some View {
         NavigationStack{
-            List(viewModel.orders) { order in
-                DashboardItem(title: "\(order.name)'s Order",
-                              description: "Address: \(order.address.street) Email: \(order.email)\n Order bought at: \(order.timestamp.formatted(date: .abbreviated, time: .shortened))",
-                              color: .blue
-                ) { selectedOrder = order }
+            Group{
+                if viewModel.isLoading {
+                    ProgressView("Loading Orders...")
+                        .controlSize(.large)
+                        .font(.title2)
+                }
+                else if viewModel.orders.isEmpty {
+                    Text("All caught up on orders!")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                } else {
+                    List(viewModel.orders) { order in
+                        DashboardItem(title: "\(order.name)'s Order",
+                                      description: " \(order.formattedDate) \n Ordered From:  \(order.address.city), \(order.address.state)",
+                                      color: .blue
+                        ) { selectedOrder = order }
+                    }
+                }
             }
-
             .navigationTitle("🛍️ Orders")
             .onAppear {
                 viewModel.loadOrders()
@@ -28,7 +39,6 @@ struct ordersUI: View {
             .sheet(item: $selectedOrder) {order in
                 OrderDetailedView(order: order)
             }
-                             
         }
     }
 }
@@ -45,15 +55,11 @@ struct OrderDetailedView: View {
                     Text("\(order.name)'s Order")
                         .font(.title)
                         .bold()
-                    Text("Address: \(order.address.street)")
-                    if !order.address.unit.isEmpty {
-                        Text("APT: \(order.address.unit)")
-                    }
-                    Text("Zipcode: \(order.address.zip)")
+                    Text("Address: \(order.address.street) \(order.address.unit.isEmpty ? "" : " \(order.address.unit)") \(order.address.zip)")
                     Text("\(order.address.city), \(order.address.state) \(order.address.country)")
                     Text("Email: \(order.email)")
                     Text("Total Price: $\(order.paypalTotal, specifier: "%.2f")")
-                    Text("Order bought at: \(order.timestamp.formatted(date: .abbreviated, time: .shortened))")
+                    Text("Bought At: \(order.formattedDate)")
                     
                     ForEach(0..<order.items.count, id: \.self) { index in
                         // Grab the item using the index
@@ -131,6 +137,6 @@ struct OrderDetailedView: View {
     }
 }
 
-#Preview {
-    ordersUI()
-}
+//#Preview {
+//    ordersUI()
+//}

@@ -23,6 +23,7 @@ class ListingsViewModel: ObservableObject{
     @Published var selectedImage: UIImage?
     
     private var db = Firestore.firestore()
+    private var storage = Storage.storage()
     
     func saveListing() {
         
@@ -31,86 +32,112 @@ class ListingsViewModel: ObservableObject{
             return
         }
         
-        guard let imageToUpload = selectedImage else {
-            statusMessage = "Error: You must select a picture before saving."
+        let isNewListing = img.isEmpty
+        
+        if isNewListing && selectedImage == nil {
+            statusMessage = "Error: A photo is requried to create a listing"
             return
         }
         
-        statusMessage = "Uploading image..."
-        
-        uploadImage(image: imageToUpload) { [weak self] url in
-            guard let self = self else { return }
-            
-            if let downloadURL = url {
-                // 2. Success! Set the URL string to our img property
-                self.img = downloadURL
-                self.performFirestoreSave()
-            } else {
-                self.statusMessage = "Image upload failed."
-            }
-        }
-    }
-    
-    func performFirestoreSave() {
-        let newListing = Listing(
-            name: name,
-            price: Double(priceString) ?? 0.0,
-            img: img, // This now has the real URL from Firebase
-            desc: desc,
-            collection: collection,
-            sale: sale
-        )
-        
-        do {
-            try db.collection("listings").document(candleID).setData(from: newListing)
-            statusMessage = "Successfully created \(name) Listing!"
-            clearFields()
-        } catch let error {
-            statusMessage = "Error writing to Firestore: \(error.localizedDescription)"
-        }
-    }
-    
-    func editListing() {
-        
-        if checkCandlenameIDValid() {
-            var updatedData: [String: Any] = [:]
-            if !priceString.isEmpty {
-                guard let p = Double(priceString) else{
-                    self.statusMessage = "Invalid Price Input, Only Numbers"
-                    return
-                }
-                updatedData["price"] = p
-            }
-            if !desc.isEmpty { updatedData["desc"] = desc}
-            if !img.isEmpty { updatedData["img"] = img}
-            if !collection.isEmpty { updatedData["collection"] = collection}
-            updatedData["sale"] = sale
-            
-            db.collection("listings").document(candleID).updateData(updatedData) { error in
-                if let error = error {
-                    self.statusMessage = "Error: \(error.localizedDescription)"
-                } else {
-                    self.statusMessage = "Successfully Updated!"
-                    self.clearFields()
+        if let imageToUpload = selectedImage {
+            statusMessage = "Uploading image..."
+            uploadImage(image: imageToUpload, fileName: candleID) { [weak self] url in
+                guard let self = self else { return }
+                if let downloadURL = url {
+                    self.img = downloadURL
+                    self.performFirestoreSave()
                 }
             }
+        } else {
+            performFirestoreSave()
         }
     }
     
     func deleteListing() {
         
-        if checkCandlenameIDValid() {
+        guard checkCandlenameIDValid() else { return }
+        
+        statusMessage = "Deleting..."
+        
+        deleteImage(fileName: candleID) {[weak self] success in
+            guard let self = self else { return }
             
-            db.collection("listings").document(candleID).delete(){ error in
+            self.db.collection("listings").document(candleID).delete(){ error in
                 if let error = error {
-                    self.statusMessage = "Error removing document: \(error)"
+                    self.statusMessage = "Error removing document: \(error.localizedDescription)"
                 } else {
                     self.statusMessage = "Document successfully removed!"
                     self.clearFields()
                 }
             }
+            
         }
     }
+    
+    func performFirestoreSave() {
+        var updatedData: [String: Any] = [:]
+        
+        updatedData["name"] = name
+        
+        if !priceString.isEmpty, let price = Double(priceString) {
+            updatedData["price"] = price
+        }
+        
+        if !img.isEmpty {
+            updatedData["img"] = img
+        }
+        
+        if !desc.isEmpty {
+            updatedData["desc"] = desc
+        }
+        
+        if !collection.isEmpty {
+            updatedData["collection"] = collection
+        }
+        
+        updatedData["sale"] = sale
+        
+        do {
+            try db.collection("listings").document(candleID).setData(updatedData, merge: true)
+            self.statusMessage = "Success!"
+            self.clearFields()
+        } catch let error {
+            self.statusMessage = "Firestore Error: \(error.localizedDescription)"
+            
+        }
+    }
+    
+    func uploadImage(image: UIImage, fileName:String, completion:@escaping (String?) -> Void) {
+        guard let imageData = image.jpegData(compressionQuality: 0.5) else {
+            completion(nil)
+            return
+        }
+        
+        let storageRef = storage.reference().child("candle_images/\(fileName)")
+        storageRef.putData(imageData, metadata: nil) { _, error in
+            if error != nil {
+                completion(nil)
+                return
+            }
+            storageRef.downloadURL { url, _ in
+                completion(url?.absoluteString)
+            }
+        }
+    }
+    
+    func deleteImage(fileName:String, completion: @escaping (Bool) -> Void) {
+        let storageRef = storage.reference().child("candle_images/\(fileName)")
+        
+        storageRef.delete { error in
+            if let error = error {
+                self.statusMessage = "Storage Delete Error: \(error.localizedDescription)"
+                completion(false)
+            } else {
+                completion(true)
+            }
+        }
+    }
+
     func clearFields() {
             name = "";
             priceString = "";
@@ -128,35 +155,5 @@ class ListingsViewModel: ObservableObject{
         candleID = name.lowercased()
                         .replacingOccurrences(of: " ", with: "")
         return true
-    }
-    
-    func uploadImage(image: UIImage, completion: @escaping (String?) -> Void) {
-        // 1. Compress the image to save space (Stay under that free limit!)
-        guard let imageData = image.jpegData(compressionQuality: 0.5) else {
-            completion(nil)
-            return
-        }
-        
-        // 2. Create a unique filename
-        let fileName = UUID().uuidString + ".jpg"
-        let storageRef = Storage.storage().reference().child("candle_images/\(fileName)")
-        
-        // 3. Start the upload
-        storageRef.putData(imageData, metadata: nil) { metadata, error in
-            if let error = error {
-                print("Error uploading: \(error.localizedDescription)")
-                completion(nil)
-                return
-            }
-            
-            // 4. Get the Download URL (This is what you save to Firestore)
-            storageRef.downloadURL { url, error in
-                if let downloadURL = url?.absoluteString {
-                    completion(downloadURL)
-                } else {
-                    completion(nil)
-                }
-            }
-        }
     }
 }

@@ -26,7 +26,7 @@ struct listingsUI: View {
                     
                     DashboardItem(title: "Edit Existing Candle",
                                    description: "Enter in the Name of the Candle you want to change and change the things you want.",
-                                   icon: "pencil.and.outline",
+                                   icon: "square.and.pencil",
                                    color: .yellow
                     ) { showingEditSheet = true }
                     
@@ -171,8 +171,8 @@ struct EditListingView: View {
                 
                 Spacer()
                 
-                WMButton(title: "Edit Candle", icon:"plus.circle", color: .yellow){
-                    viewModel.editListing()
+                WMButton(title: "Edit Candle", icon:"square.and.pencil", color: .yellow){
+                    viewModel.saveListing()
                     dismiss()
                 }
             }
@@ -223,6 +223,6 @@ struct DeleteListingView: View {
         }
     }
 }
-#Preview {
-    listingsUI()
-}
+//#Preview {
+//    listingsUI()
+//}

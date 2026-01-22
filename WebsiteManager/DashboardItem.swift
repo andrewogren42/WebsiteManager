@@ -43,7 +43,7 @@ struct DashboardItem: View {
                 VStack(alignment: .leading, spacing: 4) {
                     // Big Title
                     Text(title)
-                        .font(.headline)
+                        .font(.title3)
                         .foregroundColor(.primary)
                     
                     // Small Description
